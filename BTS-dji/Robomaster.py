@@ -1,57 +1,91 @@
-from time import sleep
-from robomaster import robot
-from robomaster import camera
-from robomaster import led
-import robomaster
+from time import sleep, time
 import math
+from threading import *
 
 
-def start():
-    global ep_chassis, ep_arm, ep_gripper, ep_led
-    ep_robot = robot.Robot()  # create robot instance
-    ep_robot.initialize(conn_type='ap')  # access point connection initialization
-    # ep_robot.initialize(conn_type='rndis')  # usb connection initialization
-    ep_chassis = ep_robot.chassis  # get the chassis module
+def limit_length(variable, desired_length, padding_char=' '):
+    if len(variable) < desired_length:
+        variable = variable + (padding_char * (desired_length - len(variable)))
+    elif len(variable) > desired_length:
+        variable = variable[:desired_length]
 
-    ep_camera = ep_robot.camera  # get the camera module
-    ep_camera.start_video_stream(display=True)  # start video stream
+    return variable
 
-    ep_led = ep_robot.led  # get the led module
-    ep_led.set_led(comp=led.COMP_ALL, r=255, g=0, b=0,
-                   effect=led.EFFECT_ON)  # set led to red just to say have conected and started your code
 
-    ep_arm = ep_robot.robotic_arm  # get the robotic arm module
-    ep_gripper = ep_robot.gripper  # get the gripper module
-    return ep_chassis
+def dist():
+    global pos
+
+    starttime = time()
+    t = 0.2
+    while True:
+        temp = pos
+
+        vx = temp["vx"]
+        vy = temp["vy"]
+        vr = temp["vr"]
+
+        x = temp["x"]
+        y = temp["y"]
+        r = temp["r"]
+
+
+        pos["x"] = x + vx * t
+        pos["y"] = y + vy * t
+        pos["r"] = r + vr * t
+
+        sleep((t / 2) - ((time() - starttime) % (t / 2)))  # run every second
+
+
+def main():
+    global ep_chassis, ep_start, pos, delay
+
+    pos = {"x": 0, "y": 0, "r": 0, "vx": 0, "vy": 0, "vr": 0}
+    while True:
+        sleep(delay)
+
+        x = limit_length(str(pos["x"]), 8)
+        y = limit_length(str(pos["y"]), 8)
+        r = limit_length(str(pos["r"]), 8)
+        vx = limit_length(str(pos["vx"]), 8)
+        vy = limit_length(str(pos["vy"]), 8)
+        vr = limit_length(str(pos["vr"]), 8)
+
+        print("| x: " + x + " | y: " + y + " | r: " + r + " | vx: " + vx + " | vy: " + vy + " | vr: " + vr + " |")
+
+
+def start(dela):
+    global ep_chassis, ep_start, pos, delay
+
+    if dela < 0.5:
+        delay = 0.5
+    else:
+        delay = dela
+
+    ep_chassis = "started"
+    ep_start = 1
+
+    t1 = Thread(target=main)
+    t1.start()
+    t2 = Thread(target=dist)
+    t2.start()
+
 
 def driveWheels(frWheel, flWheel, blWheel, brWheel):
-    
+    global pos
+
     min_limit = -200
     max_limit = 200
 
-    frWheel = max(min(frWheel, max_limit), min_limit)
-    flWheel = max(min(flWheel, max_limit), min_limit)
-    blWheel = max(min(blWheel, max_limit), min_limit)
-    brWheel = max(min(brWheel, max_limit), min_limit)
-
-    ep_chassis.drive_wheels(w1=frWheel, w2=flWheel, w3=blWheel, w4=brWheel, timeout=None)
-
-def arm(x, y):
-    ep_arm.move(x=x).wait_for_completed()
-    ep_arm.move(y=y).wait_for_completed()
+    fr = max(min(frWheel, max_limit), min_limit)
+    fl = max(min(flWheel, max_limit), min_limit)
+    bl = max(min(blWheel, max_limit), min_limit)
+    br = max(min(brWheel, max_limit), min_limit)
 
 
-def gripper(time, direction):
+    y = (fr + fl + bl + br) / 4
+    x = (-fr + fl + bl - br) / 4
+    rx = (-fr + fl - bl + br) / 4
 
-    if direction < 0:
-        ep_gripper.close(power=50)
-    else:
-        ep_gripper.open(power=50)
-
-    sleep(time)
-    ep_gripper.pause()
-
-
-def LED(r,g,b):
-    ep_led.set_led(comp=led.COMP_ALL, r=r, g=g, b=b, effect=led.EFFECT_ON)
-
+    pos["vx"] = x
+    pos["vy"] = y
+    pos["vr"] = rx
